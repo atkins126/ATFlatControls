@@ -237,14 +237,12 @@ end;
 
 procedure TATButton.DoMouseEnter;
 begin
-  FOver:= true;
   Invalidate;
   if Assigned(FOnMouseEnter) then FOnMouseEnter(Self);
 end;
 
 procedure TATButton.DoMouseLeave;
 begin
-  FOver:= false;
   Invalidate;
   if Assigned(FOnMouseLeave) then FOnMouseLeave(Self);
 end;
@@ -369,7 +367,7 @@ begin
   inherited;
 
   //override value set by LCL scaling to make all buttons look the same
-  Canvas.Font.PixelsPerInch:= Screen.PixelsPerInch;
+  Canvas.Font.PixelsPerInch:= Max(96, Screen.PixelsPerInch);
 
   PaintTo(Canvas);
 end;
@@ -399,8 +397,9 @@ begin
   else
     NSizeArrow:= 0;
 
-  if not Theme^.EnableColorBgOver then
-    FOver:= false;
+  FOver:=
+    Theme^.EnableColorBgOver and
+    PtInRect(RectAll, ScreenToClient(Mouse.CursorPos));
 
   bKindSeparator:= FKind in [abuSeparatorHorz, abuSeparatorVert];
   bUseBack:=
@@ -498,8 +497,8 @@ begin
     pnt1.X:= (NWidth-NHeight-Theme^.CrossLineWidth) div 2;
     pnt2.Y:= 0;
     pnt2.X:= pnt1.X+NHeight;
-    C.Pen.Color:= Theme^.ColorBorderPassive;
-    for i:= 1 to Theme^.CrossLineWidth do
+    C.Pen.Color:= Theme^.ColorSeparators;
+    for i:= 1 to Max(1, Theme^.DoScale(Theme^.CrossLineWidth)) do
     begin
       C.MoveTo(pnt1.X, pnt1.Y);
       C.LineTo(pnt2.X, pnt2.Y);
@@ -511,6 +510,7 @@ begin
   C.Font.Name:= Theme^.FontName;
   C.Font.Color:= ColorToRGB(IfThen(Enabled, Theme^.ColorFont, Theme^.ColorFontDisabled));
   C.Font.Size:= Theme^.DoScaleFont(Theme^.FontSize);
+  C.Font.Quality:= Theme^.FontQuality;
 
   if BoldFont then
     C.Font.Style:= [fsBold]
@@ -763,14 +763,12 @@ end;
 procedure TATButton.MouseLeave;
 begin
   inherited;
-  FOver:= false;
   Invalidate;
 end;
 
 procedure TATButton.MouseEnter;
 begin
   inherited;
-  FOver:= true;
   Invalidate;
 end;
 {$endif}
@@ -798,11 +796,13 @@ end;
 
 procedure TATButton.DoContextPopup(MousePos: TPoint; var Handled: Boolean);
 begin
+  {$ifdef FPC}
   if not IsEnabled then //prevent popup menu if form is disabled, needed for CudaText plugins dlg_proc API on Qt5
   begin
     Handled:= true;
     exit;
   end;
+  {$endif}
 
   inherited DoContextPopup(MousePos, Handled);
 end;
@@ -854,6 +854,7 @@ begin
   C:= Canvas;
   C.Font.Name:= Theme^.FontName;
   C.Font.Size:= Theme^.DoScaleFont(Theme^.FontSize);
+  C.Font.Quality:= Theme^.FontQuality;
   C.Font.Style:= [];
 
   //if FBoldFont then

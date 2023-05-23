@@ -161,8 +161,7 @@ type
     procedure KeyDown(var Key: Word; Shift: TShiftState); override;
     procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
-    function DoMouseWheel(Shift: TShiftState; WheelDelta: Integer;
-      MousePos: TPoint): Boolean; override;
+    function DoMouseWheel(Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint): Boolean; override;
     procedure ChangedSelection; virtual;
     procedure Scrolled; virtual;
     procedure DoContextPopup(MousePos: TPoint; var Handled: Boolean); override;
@@ -330,7 +329,7 @@ end;
 function TATListbox.GetItemHeightDefault: integer;
 begin
   Result:= FTheme^.DoScaleFont(CurrentFontSize) * 18 div 10 + 2;
-  Result:= Result * Screen.PixelsPerInch div 96;
+  Result:= Result * Max(96, Screen.PixelsPerInch) div 96;
 end;
 
 procedure TATListbox.UpdateItemHeight;
@@ -353,11 +352,13 @@ end;
 
 procedure TATListbox.DoContextPopup(MousePos: TPoint; var Handled: Boolean);
 begin
+  {$ifdef FPC}
   if not IsEnabled then //prevent popup menu if form is disabled, needed for CudaText plugins dlg_proc API on Qt5
   begin
     Handled:= true;
     exit;
   end;
+  {$endif}
 
   //must select item under mouse cursor
   ItemIndex:= GetItemIndexAt(MousePos);
@@ -384,7 +385,7 @@ begin
   end
   else
   begin
-    for i:= 0 to ItemCount-1 do
+    for i:= 0 to Min(ItemCount, Items.Count)-1 do
       Result:= Max(Result, C.TextWidth(Items[i]));
     Inc(Result, FIndentLeft+2);
   end;
@@ -444,7 +445,7 @@ begin
       FScrollbarHorz.Min:= 0;
       FScrollbarHorz.Max:= FMaxWidth;
       FScrollbarHorz.PageSize:= ClientWidth;
-      FScrollbarHorz.Position:= ScrollHorz;
+      FScrollbarHorz.Position:= Max(0, ScrollHorz);
       FScrollbarHorz.Update;
     end;
   end
@@ -459,7 +460,7 @@ begin
     begin
       si.nMax:= ItemCount;
       si.nPage:= GetVisibleItems;
-      si.nPos:= FItemTop;
+      si.nPos:= ItemTop;
       SetScrollInfo(Handle, SB_VERT, si, True);
     end;
 
@@ -467,7 +468,7 @@ begin
     begin
       si.nMax:= FMaxWidth;
       si.nPage:= ClientWidth;
-      si.nPos:= ScrollHorz;
+      si.nPos:= Max(0, ScrollHorz);
       SetScrollInfo(Handle, SB_HORZ, si, True);
     end;
   end;
@@ -487,13 +488,14 @@ var
   Index: integer;
   bPaintX, bCircle: boolean;
   R, RectX: TRect;
-  W, H: integer;
+  W, H, CurTopItem: integer;
 begin
   W:= ClientWidth;
-  H:= ClientHeight;
+  H:= Height; //better ClientHeight, but it gave issue CudaText #4281 on macOS
 
   C.Font.Name:= CurrentFontName;
   C.Font.Size:= FTheme^.DoScaleFont(CurrentFontSize);
+  C.Font.Quality:= FTheme^.FontQuality;
 
   C.Brush.Color:= ColorToRGB(FTheme^.ColorBgListbox);
   C.FillRect(Rect(0, 0, W, H));
@@ -522,13 +524,14 @@ begin
     C.LineTo(W, FItemHeight-1);
   end;
 
-  //adjust index of top visible item, to not leave empty space on bottom
-  FItemTop:= Min(FItemTop,
-    Max(0, ItemCount - H div FItemHeight + 1));
+  //adjust ItemTop, to not leave empty space on bottom
+  FItemTop:= Max(0, Min(FItemTop,
+    ItemCount - ClientHeight div FItemHeight + 1));
 
-  for Index:= FItemTop to ItemCount-1 do
+  CurTopItem:= FItemTop;
+  for Index:= CurTopItem to ItemCount-1 do
   begin
-    r.Top:= (Index-FItemTop)*FItemHeight + FClientOriginY;
+    r.Top:= (Index-CurTopItem)*FItemHeight + FClientOriginY;
     r.Bottom:= r.Top+FItemHeight;
     r.Left:= 0;
     r.Right:= W;
@@ -608,7 +611,7 @@ end;
 
 function TATListbox.GetColumnWidth(AIndex: integer): integer;
 begin
-  if (AIndex>=0) and (AIndex<Length(FColumnSizes)) then
+  if (AIndex>=0) and (AIndex<Length(FColumnWidths)) then
     Result:= FColumnWidths[AIndex]
   else
     Result:= 0;
@@ -732,7 +735,7 @@ begin
     C.Pen.Color:= Theme^.ColorSeparators;
     Sep.Init(SLine, FColumnSep);
 
-    for i:= 0 to Length(FColumnSizes)-1 do
+    for i:= 0 to Min(Length(FColumnSizes), Length(FColumnWidths))-1 do
     begin
       NColWidth:= FColumnWidths[i];
       Sep.GetItemStr(SItem);
@@ -929,7 +932,7 @@ end;
 
 procedure TATListbox.ScrollbarChange(Sender: TObject);
 begin
-  ItemTop:= FScrollbar.Position;
+  ItemTop:= Max(0, FScrollbar.Position);
 end;
 
 procedure TATListbox.ScrollbarHorzChange(Sender: TObject);
@@ -992,7 +995,7 @@ begin
     FItemTop:= 0
   else
   if FItemIndex<FItemTop then
-    FItemTop:= FItemIndex
+    FItemTop:= Max(0, FItemIndex)
   else
   if FItemIndex>ItemBottom then
     FItemTop:= Max(0, FItemIndex-GetVisibleItems+1);
@@ -1005,7 +1008,7 @@ procedure TATListbox.SetItemTop(AValue: integer);
 begin
   if FItemTop=AValue then Exit;
   if not IsIndexValid(AValue) then Exit;
-  FItemTop:= Max(0, AValue);
+  FItemTop:= AValue;
   Scrolled;
   Invalidate;
 end;
@@ -1043,6 +1046,7 @@ begin
   FItemHeightPercents:= 100;
   FItemHeight:= 17;
   FItemTop:= 0;
+  FHotTrackIndex:= -1;
   FScrollStyleVert:= alssShow;
   FScrollStyleHorz:= alssAuto;
   FScrollHorz:= 0;
@@ -1064,12 +1068,14 @@ begin
   FThemedFont:= true;
 
   FScrollbar:= TATScrollbar.Create(Self);
+  FScrollbar.Hide;
   FScrollbar.Parent:= Self;
   FScrollbar.Kind:= sbVertical;
   FScrollbar.Align:= alRight;
   FScrollbar.OnChange:= ScrollbarChange;
 
   FScrollbarHorz:= TATScrollbar.Create(Self);
+  FScrollbarHorz.Hide;
   FScrollbarHorz.Parent:= Self;
   FScrollbarHorz.Kind:= sbHorizontal;
   FScrollbarHorz.Align:= alBottom;
@@ -1091,18 +1097,28 @@ begin
   NMax:= Max(0, ItemCount-GetVisibleItems);
 
   case Msg.ScrollCode of
-    SB_TOP:        FItemTop:= 0;
-    SB_BOTTOM:     FItemTop:= NMax;
+    SB_TOP:
+      FItemTop:= 0;
+    SB_BOTTOM:
+      FItemTop:= NMax;
 
-    SB_LINEUP:     FItemTop:= Max(0, FItemTop-1);
-    SB_LINEDOWN:   FItemTop:= Min(NMax, FItemTop+1);
+    SB_LINEUP:
+      FItemTop:= FItemTop-1;
+    SB_LINEDOWN:
+      FItemTop:= Min(NMax, FItemTop+1);
 
-    SB_PAGEUP:     FItemTop:= Max(0, FItemTop-GetVisibleItems);
-    SB_PAGEDOWN:   FItemTop:= Min(NMax, FItemTop+GetVisibleItems);
+    SB_PAGEUP:
+      FItemTop:= FItemTop-GetVisibleItems;
+    SB_PAGEDOWN:
+      FItemTop:= Min(NMax, FItemTop+GetVisibleItems);
 
     SB_THUMBPOSITION,
-    SB_THUMBTRACK: FItemTop:= Max(0, Msg.Pos);
+    SB_THUMBTRACK:
+      FItemTop:= Msg.Pos;
   end;
+
+  //limit by 0
+  FItemTop:= Max(0, FItemTop);
 end;
 
 procedure TATListbox.UpdateFromScrollbarHorzMsg(const Msg: {$ifdef FPC}TLMScroll{$else}TWMHScroll{$endif});
@@ -1254,8 +1270,9 @@ begin
   {$endif}
 end;
 
-function TATListbox.DoMouseWheel(Shift: TShiftState; WheelDelta: Integer;
-  MousePos: TPoint): Boolean;
+function TATListbox.DoMouseWheel(Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint): Boolean;
+var
+  NDelta: integer;
 begin
   if not ThemedScrollbar then
   begin
@@ -1264,54 +1281,66 @@ begin
   end;
 
   Result:= true;
-  if WheelDelta>0 then
-    ItemTop:= Max(0, ItemTop-Mouse.WheelScrollLines)
+
+  if ssShift in Shift then
+  begin
+    NDelta:= FScrollbarHorz.PageSize div 2;
+    if WheelDelta>0 then
+      ScrollHorz:= Max(0, ScrollHorz-NDelta)
+    else
+      ScrollHorz:= Min(Max(0, FScrollbarHorz.Max-FScrollbarHorz.PageSize), ScrollHorz+NDelta);
+  end
   else
-    ItemTop:= Max(0, Min(ItemCount-VisibleItems, ItemTop+Mouse.WheelScrollLines));
+  begin
+    if WheelDelta>0 then
+      ItemTop:= Max(0, ItemTop-Mouse.WheelScrollLines)
+    else
+      ItemTop:= Max(0, Min(ItemCount-VisibleItems, ItemTop+Mouse.WheelScrollLines));
+  end;
 end;
 
 procedure TATListbox.DoKeyDown(var Key: Word; Shift: TShiftState);
 begin
-  if (key=vk_up) then
+  if (Key=VK_UP) and (Shift=[]) then
   begin
     ItemIndex:= ItemIndex-1;
     key:= 0;
     Exit
   end;
-  if (key=vk_down) then
+  if (Key=VK_DOWN) and (Shift=[]) then
   begin
     ItemIndex:= ItemIndex+1;
     key:= 0;
     Exit
   end;
 
-  if (key=vk_prior) then
+  if (Key=VK_PRIOR) and (Shift=[]) then
   begin
     ItemIndex:= Max(0, ItemIndex-(VisibleItems-1));
     key:= 0;
     Exit
   end;
-  if (key=vk_next) then
+  if (Key=VK_NEXT) and (Shift=[]) then
   begin
     ItemIndex:= Min(ItemCount-1, ItemIndex+(VisibleItems-1));
     key:= 0;
     Exit
   end;
 
-  if (key=vk_home) then
+  if (Key=VK_HOME) and (Shift=[]) then
   begin
     ItemIndex:= 0;
     key:= 0;
     Exit
   end;
-  if (key=vk_end) then
+  if (Key=VK_END) and (Shift=[]) then
   begin
     ItemIndex:= ItemCount-1;
     key:= 0;
     Exit
   end;
 
-  if (key=vk_return) then
+  if (Key=VK_RETURN) and (Shift=[]) then
   begin
     DblClick;
     key:= 0;
@@ -1322,7 +1351,7 @@ end;
 procedure TATListbox.KeyDown(var Key: Word; Shift: TShiftState);
 begin
   inherited;
-  DoKeyDown(Key,Shift);
+  DoKeyDown(Key, Shift);
 end;
 
 procedure TATListbox.MouseMove(Shift: TShiftState; X, Y: Integer);

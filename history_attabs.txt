@@ -1,3 +1,46 @@
+2023.02.02
++ add: prop OptShowModifiedColorOnX
+
+2022.10.30
+* change: don't activate tab by right-click
+
+2022.10.14
+* change: remove prop OptShowModifiedText
++ add: prop OptShowModifiedCircle (default True)
++ add: prop OptSpaceModifiedCircle
++ add: TATTabData: add TabModified2 and TabTwoDocuments
+
+2022.09.03
++ add: TATTabData field TabFontColor (default clNone)
+
+2021.10.18
++ add: prop OptMouseDragFromNotATTabs
+
+2021.06.28
+- fix: lot of issues for hidden tabs (Data.TabVisible=False)
+
+2021.03.30
++ add: support 'pinned tabs', show pinned tabs with prefix: prop OptShowPinnedText='#'
+
+2021.03.14
++ add: prop OptSpaceAfterText
+
+2021.03.05
++ add: paint scroll-arrows dimmed, when no scrolling is needed
+
+2021.02.27
++ add: prop OptTabRounded
++ add: global vars: ATTabsStretchDrawEnabled, ATTabsCircleDrawEnabled
+
+2021.02.18
++ add: in OptMultiline view, tabs can scroll vertically if too many tabs
+
+2020.05.12
++ add: prop OptScrollPagesizePercents
++ add: prop OptMouseWheelMode (enum, 3 modes)
+
+2019.10.30
+* change: ATTabs merged in ATFlatControls
 
 2019.09.07
 * change: remove published ClientWidth, ClientHeight

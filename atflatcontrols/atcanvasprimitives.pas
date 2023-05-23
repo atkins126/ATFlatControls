@@ -66,10 +66,15 @@ procedure CanvasArrowWrapped(C: TCanvas;
   AWidthScale: integer;
   APointerScale: integer);
 
+procedure CanvasPilcrowChar(C: TCanvas;
+  const ARect: TRect;
+  AColorFont: TColor;
+  AScalePercents: integer);
+
 procedure CanvasPaintPlusMinus(C: TCanvas;
   AColorBorder, AColorBG: TColor;
   ACenter: TPoint;
-  ASize: integer;
+  ASize, APenWidth: integer;
   APlus: boolean);
 
 procedure CanvasPaintCircleMark(C: TCanvas;
@@ -104,12 +109,7 @@ function CanvasCollapseStringByDots(C: TCanvas;
 function ColorBlend(c1, c2: Longint; A: Longint): Longint;
 function ColorBlendHalf(c1, c2: Longint): Longint;
 
-
 implementation
-
-var
-  _Pen: TPen = nil;
-
 
 procedure CanvasLine(C: TCanvas; P1, P2: TPoint; AColor: TColor);
 begin
@@ -123,7 +123,7 @@ begin
 end;
 
 procedure _CalcMarkRect(const R: TRect; AIndentLeft, AIndentRight: integer;
-  out X1, Y1, X2, Y2: integer); inline;
+  out X1, Y1, X2, Y2: integer);
 var
   W: integer;
 begin
@@ -210,26 +210,42 @@ end;
 procedure CanvasInvertRect(C: TCanvas; const R: TRect; AColor: TColor);
 var
   X: integer;
-  AM: TAntialiasingMode;
+  OldAntialias: TAntialiasingMode;
+  OldMode: TPenMode;
+  OldStyle: TPenStyle;
+  OldWidth: integer;
+  {$ifdef FPC}
+  OldEndCap: TPenEndCap;
+  {$endif}
 begin
-  AM:= C.AntialiasingMode;
-  _Pen.Assign(C.Pen);
+  OldAntialias:= C.AntialiasingMode;
+  OldMode:= C.Pen.Mode;
+  OldStyle:= C.Pen.Style;
+  OldWidth:= C.Pen.Width;
 
   X:= (R.Left+R.Right) div 2;
   C.Pen.Mode:= {$ifdef darwin} pmNot {$else} pmNotXor {$endif};
   C.Pen.Style:= psSolid;
   C.Pen.Color:= AColor;
   C.AntialiasingMode:= amOff;
+
   {$ifdef FPC}
+  OldEndCap:= C.Pen.EndCap;
   C.Pen.EndCap:= pecFlat;
   {$endif}
+
   C.Pen.Width:= R.Width;
 
   C.MoveTo(X, R.Top);
   C.LineTo(X, R.Bottom);
 
-  C.Pen.Assign(_Pen);
-  C.AntialiasingMode:= AM;
+  {$ifdef FPC}
+  C.Pen.EndCap:= OldEndCap;
+  {$endif}
+  C.Pen.Width:= OldWidth;
+  C.Pen.Style:= OldStyle;
+  C.Pen.Mode:= OldMode;
+  C.AntialiasingMode:= OldAntialias;
   C.Rectangle(0, 0, 0, 0); //apply pen
 end;
 {$endif}
@@ -432,19 +448,75 @@ begin
 end;
 
 
-procedure CanvasPaintPlusMinus(C: TCanvas; AColorBorder, AColorBG: TColor;
-  ACenter: TPoint; ASize: integer; APlus: boolean); inline;
+procedure CanvasPilcrowChar(C: TCanvas;
+  const ARect: TRect;
+  AColorFont: TColor;
+  AScalePercents: integer);
+var
+  H, X1, X2, Y1, Y2, Xr1, Yr1, Yr2: integer;
+  R2: TRect;
 begin
+  C.Pen.Color:= AColorFont;
+  C.Brush.Color:= AColorFont;
+
+  H:= ARect.Height * AScalePercents div 100;
+  X1:= (ARect.Left+ARect.Right) div 2+1;
+  X2:= ARect.Right-1;
+  if X2-X1<2 then Dec(X1);
+  Y1:= (ARect.Bottom+ARect.Top-H) div 2;
+  Y2:= Y1+H;
+  C.MoveTo(X1, Y1);
+  C.LineTo(X1, Y2);
+  C.MoveTo(X2, Y1);
+  C.LineTo(X2, Y2);
+  C.MoveTo(X1, Y1);
+  C.LineTo(X2, Y1);
+
+  Xr1:= Min(ARect.Left+2, X1-2);
+  Yr1:= Y1;
+  Yr2:= Yr1+(X1-Xr1)+1;
+  R2:= Rect(Xr1, Yr1, X1, Yr2);
+  C.FillRect(R2);
+end;
+
+procedure CanvasPaintPlusMinus(C: TCanvas; AColorBorder, AColorBG: TColor;
+  ACenter: TPoint; ASize, APenWidth: integer; APlus: boolean);
+var
+  OldPenWidth: integer;
+  {$ifdef fpc}
+  OldPenCap: TPenEndCap;
+  {$endif}
+begin
+  OldPenWidth:= C.Pen.Width;
+  {$ifdef fpc}
+  OldPenCap:= C.Pen.EndCap;
+  {$endif}
+
   C.Brush.Color:= AColorBG;
   C.Pen.Color:= AColorBorder;
+  C.Pen.Width:= APenWidth;
+  {$ifdef fpc}
+  C.Pen.EndCap:= pecFlat;
+  {$endif}
+
   C.Rectangle(ACenter.X-ASize, ACenter.Y-ASize, ACenter.X+ASize+1, ACenter.Y+ASize+1);
-  C.MoveTo(ACenter.X-ASize+2, ACenter.Y);
-  C.LineTo(ACenter.X+ASize-1, ACenter.Y);
+
+  //avoid painting plus/minus by pen width 2/4/6
+  if not Odd(APenWidth) then
+    C.Pen.Width:= APenWidth-1;
+
+  C.MoveTo(ACenter.X-ASize+APenWidth+1, ACenter.Y);
+  C.LineTo(ACenter.X+ASize-APenWidth, ACenter.Y);
   if APlus then
   begin
-    C.MoveTo(ACenter.X, ACenter.Y-ASize+2);
-    C.LineTo(ACenter.X, ACenter.Y+ASize-1);
+    C.MoveTo(ACenter.X, ACenter.Y-ASize+APenWidth+1);
+    C.LineTo(ACenter.X, ACenter.Y+ASize-APenWidth);
   end;
+
+  C.Pen.Width:= OldPenWidth;
+  {$ifdef fpc}
+  C.Pen.EndCap:= OldPenCap;
+  {$endif}
 end;
 
 procedure CanvasLine_WavyHorz(C: TCanvas; Color: TColor; X1, Y1, X2, Y2: integer; AtDown: boolean);
@@ -688,13 +760,6 @@ begin
   end;
 end;
 
-
-initialization
-  _Pen:= TPen.Create;
-
-finalization
-  if Assigned(_Pen) then
-    FreeAndNil(_Pen);
 
 end.
 

@@ -1,4 +1,4 @@
-{
+﻿{
 ATTabs component for Delphi/Lazarus
 Copyright (c) Alexey Torgashin (UVviewsoft.com)
 License: MPL 2.0 or LGPL
@@ -80,7 +80,14 @@ type
     FTabColor: TColor;
     FTabColorActive: TColor;
     FTabColorOver: TColor;
+    FTabFontColor: TColor;
     FTabModified: boolean;
+    FTabModified2: boolean;
+    FTabExtModified: boolean;
+    FTabExtModified2: boolean;
+    FTabExtDeleted: boolean;
+    FTabExtDeleted2: boolean;
+    FTabTwoDocuments: boolean;
     FTabSpecial: boolean;
     FTabSpecialWidth: integer;
     FTabSpecialHeight: integer;
@@ -94,7 +101,7 @@ type
     FTabVisible: boolean;
     FTabVisibleX: boolean;
     FTabPinned: boolean;
-    FTag: PtrInt;
+    FTag: NativeInt; //PtrInt not exists in Delphi
     function GetTabCaptionFull: TATTabString;
     procedure UpdateTabSet;
     procedure SetTabImageIndex(const Value: TImageIndex);
@@ -102,6 +109,7 @@ type
     procedure SetTabColor(const Value: TColor);
     procedure SetTabColorActive(const Value: TColor);
     procedure SetTabColorOver(const Value: TColor);
+    procedure SetTabFontColor(const Value: TColor);
     procedure SetTabHideXButton(const Value: boolean);
     procedure SetTabVisible(const Value: boolean);
   public
@@ -116,7 +124,7 @@ type
     property TabSpecial: boolean read FTabSpecial write FTabSpecial;
     property TabStartsNewLine: boolean read FTabStartsNewLine write FTabStartsNewLine;
     property TabVisibleX: boolean read FTabVisibleX write FTabVisibleX;
-    property Tag: PtrInt read FTag write FTag;
+    property Tag: NativeInt read FTag write FTag;
     procedure Assign(Source: TPersistent); override;
   published
     property TabCaption: TATTabString read FTabCaption write SetTabCaption;
@@ -125,7 +133,14 @@ type
     property TabColor: TColor read FTabColor write SetTabColor default clNone;
     property TabColorActive: TColor read FTabColorActive write SetTabColorActive default clNone;
     property TabColorOver: TColor read FTabColorOver write SetTabColorOver default clNone;
+    property TabFontColor: TColor read FTabFontColor write SetTabFontColor default clNone;
     property TabModified: boolean read FTabModified write FTabModified default false;
+    property TabModified2: boolean read FTabModified2 write FTabModified2 default false;
+    property TabExtModified: boolean read FTabExtModified write FTabExtModified default false;
+    property TabExtModified2: boolean read FTabExtModified2 write FTabExtModified2 default false;
+    property TabExtDeleted: boolean read FTabExtDeleted write FTabExtDeleted default false;
+    property TabExtDeleted2: boolean read FTabExtDeleted2 write FTabExtDeleted2 default false;
+    property TabTwoDocuments: boolean read FTabTwoDocuments write FTabTwoDocuments default false;
     property TabImageIndex: TImageIndex read FTabImageIndex write SetTabImageIndex default -1;
     property TabFontStyle: TFontStyles read FTabFontStyle write FTabFontStyle default [];
     property TabPopupMenu: TPopupMenu read FTabPopupMenu write FTabPopupMenu;
@@ -203,11 +218,19 @@ type
 
   TATTabPaintInfo = record
     Rect: TRect;
+    RectX: TRect;
     Caption: TATTabString;
-    Modified: boolean;
+    Modified,
+    Modified2,
+    ExtModified,
+    ExtModified2,
+    ExtDeleted,
+    ExtDeleted2: boolean;
     Pinned: boolean;
     TabIndex: integer;
+    ImageIndex: integer;
     ColorFont: TColor;
+    TwoDocuments: boolean;
     TabActive,
     TabMouseOver,
     TabMouseOverX: boolean;
@@ -342,6 +365,7 @@ const
   _InitOptSpaceXInner = 3;
   _InitOptSpaceXSize = 12;
   _InitOptSpaceXIncrementRound = 1;
+  _InitOptSpaceModifiedCircle = 5;
   _InitOptArrowSize = 4;
   _InitOptArrowSpaceLeft = 4;
   _InitOptColoredBandSize = 4;
@@ -358,6 +382,8 @@ const
   _InitOptShowFlat = false;
   _InitOptShowFlatMouseOver = true;
   _InitOptShowFlatSep = true;
+  _InitOptShowModifiedCircle = true;
+  _InitOptShowModifiedColorOnX = false;
   _InitOptPosition = atpTop;
   _InitOptFillWidth = true;
   _InitOptFillWidthLastToo = false;
@@ -368,7 +394,6 @@ const
   _InitOptShowXRounded = true;
   _InitOptShowXButtons = atbxShowAll;
   _InitOptShowPlusTab = true;
-  _InitOptShowModifiedText = '*';
   _InitOptShowPinnedText = '!';
   _InitOptShowEntireColor = false;
   _InitOptShowActiveMarkInverted = true;
@@ -453,6 +478,7 @@ type
     FOptSpaceXInner: integer; //space from "x" square edge to "x" mark
     FOptSpaceXSize: integer; //size of "x" mark
     FOptSpaceXIncrementRound: integer;
+    FOptSpaceModifiedCircle: integer; //diameter of 'modified circle mark' above caption
     FOptColoredBandSize: integer; //height of "misc color" line
     FOptColoredBandForTop: TATTabPosition;
     FOptColoredBandForBottom: TATTabPosition;
@@ -470,6 +496,8 @@ type
     FOptIconPosition: TATTabIconPosition;
     FOptWhichActivateOnClose: TATTabActionOnClose;
     FOptCaptionAlignment: TAlignment;
+    FOptShowModifiedCircle: boolean;
+    FOptShowModifiedColorOnX: boolean;
     FOptShowFlat: boolean;
     FOptShowFlatMouseOver: boolean;
     FOptShowFlatSepar: boolean;
@@ -477,7 +505,6 @@ type
     FOptShowXButtons: TATTabShowClose; //show mode for "x" buttons
     FOptShowArrowsNear: boolean;
     FOptShowPlusTab: boolean; //show "plus" tab
-    FOptShowModifiedText: TATTabString;
     FOptShowPinnedText: TATTabString;
     FOptShowEntireColor: boolean;
     FOptShowNumberPrefix: TATTabString;
@@ -647,6 +674,7 @@ type
     function GetRectOfButtonIndex(AIndex: integer; AtLeft: boolean): TRect;
     function GetScrollPageSize: integer;
     function IsDraggingAllowed: boolean;
+    procedure PaintSimulated;
     procedure SetOptButtonLayout(const AValue: string);
     procedure SetOptScalePercents(AValue: integer);
     procedure SetOptVarWidth(AValue: boolean);
@@ -685,6 +713,8 @@ type
     procedure DragDrop(Source: TObject; X, Y: integer); override;
 
     procedure ApplyButtonLayout;
+    procedure ApplyTabHintToControlHint(ATabIndex: integer; var AData: TATTabData;
+      AResetLastIndex: boolean);
     function GetTabRectWidth(APlusBtn: boolean): integer;
     procedure UpdateRectPlus(var R: TRect);
     procedure UpdateTabTooltip;
@@ -844,6 +874,7 @@ type
     property OptSpaceXInner: integer read FOptSpaceXInner write FOptSpaceXInner default _InitOptSpaceXInner;
     property OptSpaceXSize: integer read FOptSpaceXSize write FOptSpaceXSize default _InitOptSpaceXSize;
     property OptSpaceXIncrementRound: integer read FOptSpaceXIncrementRound write FOptSpaceXIncrementRound default _InitOptSpaceXIncrementRound;
+    property OptSpaceModifiedCircle: integer read FOptSpaceModifiedCircle write FOptSpaceModifiedCircle default _InitOptSpaceModifiedCircle;
     property OptColoredBandSize: integer read FOptColoredBandSize write FOptColoredBandSize default _InitOptColoredBandSize;
     property OptColoredBandForTop: TATTabPosition read FOptColoredBandForTop write FOptColoredBandForTop default atpTop;
     property OptColoredBandForBottom: TATTabPosition read FOptColoredBandForBottom write FOptColoredBandForBottom default atpBottom;
@@ -864,13 +895,14 @@ type
     property OptShowFlat: boolean read FOptShowFlat write FOptShowFlat default _InitOptShowFlat;
     property OptShowFlatMouseOver: boolean read FOptShowFlatMouseOver write FOptShowFlatMouseOver default _InitOptShowFlatMouseOver;
     property OptShowFlatSepar: boolean read FOptShowFlatSepar write FOptShowFlatSepar default _InitOptShowFlatSep;
+    property OptShowModifiedCircle: boolean read FOptShowModifiedCircle write FOptShowModifiedCircle default _InitOptShowModifiedCircle;
+    property OptShowModifiedColorOnX: boolean read FOptShowModifiedColorOnX write FOptShowModifiedColorOnX default _InitOptShowModifiedColorOnX;
     property OptShowScrollMark: boolean read FOptShowScrollMark write FOptShowScrollMark default _InitOptShowScrollMark;
     property OptShowDropMark: boolean read FOptShowDropMark write FOptShowDropMark default _InitOptShowDropMark;
     property OptShowXRounded: boolean read FOptShowXRounded write FOptShowXRounded default _InitOptShowXRounded;
     property OptShowXButtons: TATTabShowClose read FOptShowXButtons write FOptShowXButtons default _InitOptShowXButtons;
     property OptShowPlusTab: boolean read FOptShowPlusTab write SetOptShowPlusTab default _InitOptShowPlusTab;
     property OptShowArrowsNear: boolean read FOptShowArrowsNear write FOptShowArrowsNear default _InitOptShowArrowsNear;
-    property OptShowModifiedText: TATTabString read FOptShowModifiedText write FOptShowModifiedText;
     property OptShowPinnedText: TATTabString read FOptShowPinnedText write FOptShowPinnedText;
     property OptShowEntireColor: boolean read FOptShowEntireColor write FOptShowEntireColor default _InitOptShowEntireColor;
     property OptShowNumberPrefix: TATTabString read FOptShowNumberPrefix write FOptShowNumberPrefix;
@@ -928,7 +960,6 @@ implementation
 
 uses
   SysUtils,
-  StrUtils,
   Dialogs,
   Forms,
   Math;
@@ -951,6 +982,7 @@ procedure TATTabPaintInfo.Clear;
 begin
   Self.Caption:= '';
   FillChar(Self, SizeOf(Self), 0);
+  ImageIndex:= -1;
 end;
 
 { TATTabListCollection }
@@ -1030,6 +1062,15 @@ begin
   if FTabColorOver<>Value then
   begin
     FTabColorOver:= Value;
+    UpdateTabSet;
+  end;
+end;
+
+procedure TATTabData.SetTabFontColor(const Value: TColor);
+begin
+  if FTabFontColor<>Value then
+  begin
+    FTabFontColor:= Value;
     UpdateTabSet;
   end;
 end;
@@ -1199,6 +1240,7 @@ begin
   TabColor:= clNone;
   TabColorActive:= clNone;
   TabColorOver:= clNone;
+  TabFontColor:= clNone;
   TabImageIndex:= -1;
   TabFontStyle:= [];
 end;
@@ -1230,7 +1272,14 @@ begin
     TabColor:= D.TabColor;
     TabColorActive:= D.TabColorActive;
     TabColorOver:= D.TabColorOver;
+    TabFontColor:= D.TabFontColor;
     TabModified:= D.TabModified;
+    TabModified2:= D.TabModified2;
+    TabExtModified:= D.TabExtModified;
+    TabExtModified2:= D.TabExtModified2;
+    TabExtDeleted:= D.TabExtDeleted;
+    TabExtDeleted2:= D.TabExtDeleted2;
+    TabTwoDocuments:= D.TabTwoDocuments;
     TabImageIndex:= D.TabImageIndex;
     TabFontStyle:= D.TabFontStyle;
     TabPopupMenu:= D.TabPopupMenu;
@@ -1265,7 +1314,7 @@ begin
   inherited;
 
   Caption:= '';
-  ControlStyle:= ControlStyle+[csOpaque];
+  ControlStyle:= ControlStyle+[csOpaque {$ifdef FPC}, csNoFocus{$endif}];
   DoubleBuffered:= IsDoubleBufferedNeeded;
   DragMode:= dmManual; //required Manual
   ParentColor:= false; //better don't support ParentColor, it's mess in code
@@ -1340,6 +1389,7 @@ begin
   FOptSpaceXInner:= _InitOptSpaceXInner;
   FOptSpaceXSize:= _InitOptSpaceXSize;
   FOptSpaceXIncrementRound:= _InitOptSpaceXIncrementRound;
+  FOptSpaceModifiedCircle:= _InitOptSpaceModifiedCircle;
   FOptArrowSize:= _InitOptArrowSize;
   FOptColoredBandSize:= _InitOptColoredBandSize;
   FOptColoredBandForTop:= atpTop;
@@ -1360,6 +1410,8 @@ begin
   FOptShowFlat:= _InitOptShowFlat;
   FOptShowFlatMouseOver:= _InitOptShowFlatMouseOver;
   FOptShowFlatSepar:= _InitOptShowFlatSep;
+  FOptShowModifiedCircle:= _InitOptShowModifiedCircle;
+  FOptShowModifiedColorOnX:= _InitOptShowModifiedColorOnX;
   FOptPosition:= _InitOptPosition;
   FOptShowNumberPrefix:= _InitOptShowNumberPrefix;
   FOptShowScrollMark:= _InitOptShowScrollMark;
@@ -1368,7 +1420,6 @@ begin
   FOptShowXButtons:= _InitOptShowXButtons;
   FOptShowPlusTab:= _InitOptShowPlusTab;
   FOptShowArrowsNear:= _InitOptShowArrowsNear;
-  FOptShowModifiedText:= _InitOptShowModifiedText;
   FOptShowPinnedText:= _InitOptShowPinnedText;
   FOptShowEntireColor:= _InitOptShowEntireColor;
   FOptShowActiveMarkInverted:= _InitOptShowActiveMarkInverted;
@@ -1405,7 +1456,7 @@ begin
   FBitmapRound.PixelFormat:= pf24bit;
   BitmapResize(FBitmapRound, _InitRoundedBitmapSize, _InitRoundedBitmapSize);
 
-  FTabIndex:= 0;
+  FTabIndex:= -1;
   FTabIndexOver:= -1;
   FTabIndexHinted:= -1;
   FTabIndexHintedPrev:= -1;
@@ -1426,7 +1477,7 @@ end;
 procedure TATTabs.Clear;
 begin
   FTabList.Clear;
-  FTabIndex:= 0;
+  FTabIndex:= -1;
 end;
 
 destructor TATTabs.Destroy;
@@ -1461,6 +1512,12 @@ begin
   inherited;
 end;
 
+procedure TATTabs.PaintSimulated;
+begin
+  if Assigned(FBitmap) then
+    DoPaintTo(FBitmap.Canvas);
+end;
+
 procedure TATTabs.Paint;
 begin
   if DoubleBuffered then
@@ -1483,16 +1540,25 @@ begin
   {$endif}
 end;
 
+procedure _PaintMaybeCircle(C: TCanvas; X1, Y1, X2, Y2: integer);
+begin
+  if ATTabsCircleDrawEnabled then
+    C.Ellipse(X1, Y1, X2, Y2)
+  else
+    C.Rectangle(X1, Y1, X2, Y2);
+end;
+
 procedure TATTabs.DoPaintTabTo(C: TCanvas; const AInfo: TATTabPaintInfo);
 const
-  cIndentSepTop = 0;
-  cIndentSepBottom = 1;
+  cIndentFlatSeparatorTop = 0;
+  cIndentFlatSeparatorBottom = 1;
+  cIndentAboveCircle = 1;
+  cIndentBetweenCircles = 1;
 var
   RectText: TRect;
-  NIndentL, NIndentR, NIndentTop, NLeft,
+  NIndentL, NIndentR, NIndentTop, NLeft, NTop,
   NLineHeight, NLineWidth, NLineIndex: integer;
-  AImageIndex: integer;
-  ATabModified: boolean;
+  NCircleSize: integer;
   TempCaption: TATTabString;
   Extent: TSize;
   bNeedMoreSpace: boolean;
@@ -1512,16 +1578,9 @@ begin
   Data:= GetTabData(AInfo.TabIndex);
   if Assigned(Data) then
   begin
-    AImageIndex:= Data.TabImageIndex;
-    ATabModified:= Data.TabModified;
     // if tab is not visible then don't draw
     if not Data.TabVisible then
-       exit;
-  end
-  else
-  begin
-    AImageIndex:= -1;
-    ATabModified:= false;
+      exit;
   end;
 
   UpdateCanvasAntialiasMode(C);
@@ -1548,12 +1607,12 @@ begin
   if FOptShowFlat and FOptShowFlatSepar then
   begin
     NLeft:= AInfo.Rect.Left - DoScale(FOptSpaceBetweenTabs) div 2;
-    DrawLine(C, NLeft, AInfo.Rect.Top+cIndentSepTop, NLeft, AInfo.Rect.Bottom-cIndentSepBottom, FColorSeparator);
+    DrawLine(C, NLeft, AInfo.Rect.Top+cIndentFlatSeparatorTop, NLeft, AInfo.Rect.Bottom-cIndentFlatSeparatorBottom, FColorSeparator);
   end;
 
   //imagelist
   if Assigned(FImages) then
-    if (AImageIndex>=0) and (AImageIndex<FImages.Count) then
+    if (AInfo.ImageIndex>=0) and (AInfo.ImageIndex<FImages.Count) then
     begin
       NIndentTop:=
         (RectText.Top + RectText.Bottom - FImages.Height + DoScale(FOptColoredBandSize)) div 2;
@@ -1563,7 +1622,7 @@ begin
             FImages.Draw(C,
               RectText.Left - 2,
               NIndentTop,
-              AImageIndex);
+              AInfo.ImageIndex);
             Inc(RectText.Left, FImages.Width+DoScale(FOptSpaceBetweenIconCaption));
           end;
         aipIconRighterThanText:
@@ -1571,7 +1630,7 @@ begin
             FImages.Draw(C,
               RectText.Right - FImages.Width + 2,
               NIndentTop,
-              AImageIndex);
+              AInfo.ImageIndex);
             Dec(RectText.Right, FImages.Width+DoScale(FOptSpaceBetweenIconCaption));
           end;
         aipIconCentered:
@@ -1579,14 +1638,14 @@ begin
             FImages.Draw(C,
               (RectText.Left + RectText.Right - FImages.Width) div 2,
               NIndentTop,
-              AImageIndex);
+              AInfo.ImageIndex);
           end;
         aipIconAboveTextCentered:
           begin
             FImages.Draw(C,
               (RectText.Left + RectText.Right - FImages.Width) div 2,
               RectText.Top + DoScale(FOptColoredBandSize),
-              AImageIndex);
+              AInfo.ImageIndex);
             Inc(RectText.Top, FImages.Height+DoScale(FOptSpaceBetweenIconCaption));
           end;
         aipIconBelowTextCentered:
@@ -1594,7 +1653,7 @@ begin
             FImages.Draw(C,
               (RectText.Left + RectText.Right - FImages.Width) div 2,
               RectText.Bottom - FImages.Height,
-              AImageIndex);
+              AInfo.ImageIndex);
             Dec(RectText.Bottom, FImages.Height+DoScale(FOptSpaceBetweenIconCaption));
           end;
       end;
@@ -1606,7 +1665,10 @@ begin
   begin
     C.Font.Assign(Self.Font);
     C.Font.Style:= AInfo.FontStyle;
-    C.Font.Color:= AInfo.ColorFont;
+    if Assigned(Data) and (Data.TabFontColor<>clNone) then
+      C.Font.Color:= Data.TabFontColor
+    else
+      C.Font.Color:= AInfo.ColorFont;
     C.Font.Size:= DoScaleFont(C.Font.Size);
 
     TempCaption:= AInfo.Caption;
@@ -1695,6 +1757,47 @@ begin
       end;
       DoPaintColoredBand(C, AInfo.Rect, NColor, ColorPos);
     end;
+  end;
+
+  if FOptShowModifiedCircle and (
+    AInfo.Modified or
+    AInfo.Modified2 or
+    AInfo.ExtModified or
+    AInfo.ExtModified2 or
+    AInfo.ExtDeleted or
+    AInfo.ExtDeleted2
+    ) then
+  begin
+    NCircleSize:= DoScale(FOptSpaceModifiedCircle);
+    NLeft:= (AInfo.Rect.Left+AInfo.Rect.Right) div 2;
+    if AInfo.TwoDocuments then
+      Dec(NLeft, NCircleSize)
+    else
+      Dec(NLeft, NCircleSize div 2);
+    NTop:= RectText.Top+DoScale(cIndentAboveCircle);
+
+    C.Pen.Color:= AInfo.ColorFont;
+    C.Brush.Color:= AInfo.ColorFont;
+
+    if AInfo.TwoDocuments or AInfo.Modified or AInfo.ExtModified or AInfo.ExtDeleted then
+    begin
+      if AInfo.Modified or AInfo.ExtModified or AInfo.ExtDeleted then
+        C.Brush.Style:= bsSolid
+      else
+        C.Brush.Style:= bsClear;
+      _PaintMaybeCircle(C, NLeft, NTop, NLeft+NCircleSize, NTop+NCircleSize);
+    end;
+    if AInfo.TwoDocuments then
+    begin
+      if AInfo.Modified2 or AInfo.Modified2 or AInfo.ExtDeleted2 then
+        C.Brush.Style:= bsSolid
+      else
+        C.Brush.Style:= bsClear;
+      Inc(NLeft, NCircleSize+DoScale(cIndentBetweenCircles));
+      _PaintMaybeCircle(C, NLeft, NTop, NLeft+NCircleSize, NTop+NCircleSize);
+    end;
+
+    C.Brush.Style:= bsSolid;
   end;
 end;
 
@@ -2022,10 +2125,10 @@ begin
   else
     ElemType:= aeTabIconX;
 
-  if IsPaintNeeded(ElemType, -1, C, AInfo.Rect) then
+  if IsPaintNeeded(ElemType, -1, C, AInfo.RectX) then
   begin
     DoPaintXTo(C, AInfo);
-    DoPaintAfter(ElemType, -1, C, AInfo.Rect);
+    DoPaintAfter(ElemType, -1, C, AInfo.RectX);
   end;
 end;
 
@@ -2042,7 +2145,7 @@ begin
       Pic:= FPic_X_a
     else
       Pic:= FPic_X;
-    Pic.Draw(C, AInfo.Rect.Left, AInfo.Rect.Top);
+    Pic.Draw(C, AInfo.RectX.Left, AInfo.RectX.Top);
     exit;
   end;
 
@@ -2052,11 +2155,20 @@ begin
     NColorBg:= GetTabBgColor_Passive(AInfo.TabIndex);
   GetTabXColors(AInfo.TabIndex, AInfo.TabMouseOverX, NColorXBg, NColorXBorder, NColorXMark);
 
+  if FOptShowModifiedColorOnX then
+    if AInfo.Modified or
+       AInfo.Modified2 or
+       AInfo.ExtModified or
+       AInfo.ExtModified2 or
+       AInfo.ExtDeleted or
+       AInfo.ExtDeleted2 then
+      NColorXMark:= FColorFontModified;
+
   if FOptShowXRounded and ATTabsCircleDrawEnabled then
   begin
     if NColorXBg<>clNone then
     begin
-      RectRound:= AInfo.Rect;
+      RectRound:= AInfo.RectX;
       NSize:= DoScale(FOptSpaceXIncrementRound);
       InflateRect(RectRound, NSize, NSize);
 
@@ -2077,18 +2189,18 @@ begin
     else
     begin
       C.Brush.Color:= NColorBg;
-      C.FillRect(AInfo.Rect);
+      C.FillRect(AInfo.RectX);
     end;
   end
   else
   begin
     C.Brush.Color:= IfThen(NColorXBg<>clNone, NColorXBg, NColorBg);
-    C.FillRect(AInfo.Rect);
+    C.FillRect(AInfo.RectX);
     C.Pen.Color:= IfThen(NColorXBorder<>clNone, NColorXBorder, NColorBg);
-    C.Rectangle(AInfo.Rect);
+    C.Rectangle(AInfo.RectX);
   end;
 
-  RectRound:= AInfo.Rect;
+  RectRound:= AInfo.RectX;
   Dec(RectRound.Right);
   Dec(RectRound.Bottom);
   NSize:= DoScale(FOptSpaceXInner);
@@ -2426,7 +2538,13 @@ end;
 
 function TATTabs._IsDrag: boolean;
 begin
-  Result:= Dragging and FMouseDragBegins;
+  Result:=
+    {$ifdef FPC}
+    DragManager.IsDragging; //better check than commented code below: it works when drag was started in another control
+    //Dragging and FMouseDragBegins;
+    {$else}
+    Dragging;
+    {$endif}
 end;
 
 procedure TATTabs.GetTabXColors(AIndex: integer;
@@ -2554,19 +2672,22 @@ end;
 
 procedure TATTabs.DoPaintTo(C: TCanvas);
 var
-  RRect, RectX: TRect;
+  RRect, RRectXMark: TRect;
   NColorFont: TColor;
   ElemType: TATTabElemType;
   Data: TATTabData;
   NFontStyle: TFontStyles;
   bMouseOver, bMouseOverX: boolean;
   Info: TATTabPaintInfo;
+  PntMouse: TPoint;
   i: integer;
 begin
   FActualMultiline:= (FOptPosition in [atpLeft, atpRight]) or FOptMultiline;
 
   ElemType:= aeBackground;
   RRect:= ClientRect;
+  bMouseOver:= false;
+  bMouseOverX:= false;
 
   if not ATTabsStretchDrawEnabled then
     FLastSpaceSide:= 0
@@ -2577,8 +2698,11 @@ begin
     FLastSpaceSide:= 0;
 
   //update index here, because user can add/del tabs by keyboard
-  with ScreenToClient(Mouse.CursorPos) do
-    FTabIndexOver:= GetTabAt(X, Y, bMouseOverX);
+  PntMouse:= ScreenToClient(Mouse.CursorPos);
+  if not PtInRect(RRect, PntMouse) then
+    FTabIndexOver:= -1
+  else
+    FTabIndexOver:= GetTabAt(PntMouse.X, PntMouse.Y, bMouseOverX);
 
   FLastOverIndex:= FTabIndexOver;
   FLastOverX:= bMouseOverX;
@@ -2632,13 +2756,30 @@ begin
       RRect:= GetRectScrolled(Data.TabRect);
       if RRect=cRect0 then Continue;
 
-      GetTabXProps(i, RRect, bMouseOverX, RectX);
+      GetTabXProps(i, RRect, bMouseOverX, RRectXMark);
       bMouseOver:= i=FTabIndexOver;
 
       if bMouseOver then
         ElemType:= aeTabPassiveOver
       else
         ElemType:= aeTabPassive;
+
+      Info.Clear;
+      Info.Rect:= RRect;
+      Info.RectX:= RRectXMark;
+      Info.Caption:= GetTabCaptionFinal(Data, i);
+      Info.Modified:= Data.TabModified;
+      Info.Modified2:= Data.TabModified2;
+      Info.ExtModified:= Data.TabExtModified;
+      Info.ExtModified2:= Data.TabExtModified2;
+      Info.ExtDeleted:= Data.TabExtDeleted;
+      Info.ExtDeleted2:= Data.TabExtDeleted2;
+      Info.Pinned:= Data.TabPinned;
+      Info.TabIndex:= i;
+      Info.ImageIndex:= Data.TabImageIndex;
+      Info.TwoDocuments:= Data.TabTwoDocuments;
+      Info.TabMouseOver:= bMouseOver;
+      Info.TabMouseOverX:= bMouseOverX;
 
       if IsPaintNeeded(ElemType, i, C, RRect) then
       begin
@@ -2652,21 +2793,16 @@ begin
         if (FColorFontHot<>clNone) and bMouseOver then
           NColorFont:= FColorFontHot
         else
-        if Data.TabModified then
+        if Data.TabModified or Data.TabModified2 then
           NColorFont:= FColorFontModified
+        else
+        if Data.TabFontColor<>clNone then
+          NColorFont:= Data.TabFontColor
         else
           NColorFont:= FColorFont;
 
-        Info.Clear;
-        Info.Rect:= RRect;
-        Info.Caption:= GetTabCaptionFinal(Data, i);
-        Info.Modified:= Data.TabModified;
-        Info.Pinned:= Data.TabPinned;
-        Info.TabIndex:= i;
-        Info.ColorFont:= NColorFont;
-        Info.TabMouseOver:= bMouseOver;
-        Info.TabMouseOverX:= bMouseOverX;
         Info.FontStyle:= NFontStyle;
+        Info.ColorFont:= NColorFont;
 
         DoPaintTabTo(C, Info);
         DoPaintAfter(ElemType, i, C, RRect);
@@ -2674,10 +2810,6 @@ begin
 
       if Data.TabVisibleX then
       begin
-        Info.Clear;
-        Info.Rect:= RectX;
-        Info.TabIndex:= i;
-        Info.TabMouseOverX:= bMouseOverX;
         DoPaintX(C, Info);
       end;
     end;
@@ -2686,55 +2818,64 @@ begin
   i:= FTabIndex;
   if IsIndexOk(i) then
   begin
-   Data:= GetTabData(i);
-   if Assigned(Data) and Data.TabVisible then
-   begin
-    RRect:= GetRectScrolled(Data.TabRect);
-    GetTabXProps(i, RRect, bMouseOverX, RectX);
-
-    bMouseOver:= i=FTabIndexOver;
-
-    if IsPaintNeeded(aeTabActive, i, C, RRect) then
+    Data:= GetTabData(i);
+    if Assigned(Data) and Data.TabVisible then
     begin
-      if FOptActiveFontStyleUsed then
-        NFontStyle:= FOptActiveFontStyle
-      else
-        NFontStyle:= Data.TabFontStyle;
+      RRect:= GetRectScrolled(Data.TabRect);
+      GetTabXProps(i, RRect, bMouseOverX, RRectXMark);
 
-      if FColorFontActive<>clNone then
-        NColorFont:= FColorFontActive
-      else
-      if Data.TabModified then
-        NColorFont:= FColorFontModified
-      else
-        NColorFont:= FColorFont;
+      bMouseOver:= i=FTabIndexOver;
 
       Info.Clear;
       Info.Rect:= RRect;
+      Info.RectX:= RRectXMark;
       Info.Caption:= GetTabCaptionFinal(Data, i);
       Info.Modified:= Data.TabModified;
+      Info.Modified2:= Data.TabModified2;
+      Info.ExtModified:= Data.TabExtModified;
+      Info.ExtModified2:= Data.TabExtModified2;
+      Info.ExtDeleted:= Data.TabExtDeleted;
+      Info.ExtDeleted2:= Data.TabExtDeleted2;
       Info.Pinned:= Data.TabPinned;
       Info.TabIndex:= i;
-      Info.ColorFont:= NColorFont;
+      Info.ImageIndex:= Data.TabImageIndex;
+      Info.TwoDocuments:= Data.TabTwoDocuments;
       Info.TabActive:= true;
       Info.TabMouseOver:= bMouseOver;
       Info.TabMouseOverX:= bMouseOverX;
-      Info.FontStyle:= NFontStyle;
-
-      DoPaintTabTo(C, Info);
-      DoPaintAfter(aeTabActive, i, C, RRect);
-    end;
-
-    if Data.TabVisibleX then
-    begin
-      Info.Clear;
-      Info.Rect:= RectX;
-      Info.TabIndex:= i;
       Info.TabActive:= true;
       Info.TabMouseOverX:= bMouseOverX;
-      DoPaintX(C, Info);
+
+      if IsPaintNeeded(aeTabActive, i, C, RRect) then
+      begin
+        if FOptActiveFontStyleUsed then
+          NFontStyle:= FOptActiveFontStyle
+        else
+          NFontStyle:= Data.TabFontStyle;
+
+        if FColorFontActive<>clNone then
+          NColorFont:= FColorFontActive
+        else
+        if Data.TabModified or Data.TabModified2 then
+          NColorFont:= FColorFontModified
+        else
+        if Data.TabFontColor<>clNone then
+          NColorFont:= Data.TabFontColor
+        else
+          NColorFont:= FColorFont;
+
+        Info.FontStyle:= NFontStyle;
+        Info.ColorFont:= NColorFont;
+
+        DoPaintTabTo(C, Info);
+        DoPaintAfter(aeTabActive, i, C, RRect);
+      end;
+
+      if Data.TabVisibleX then
+      begin
+        DoPaintX(C, Info);
+      end;
     end;
-   end;
   end;
 
   //button back
@@ -2779,35 +2920,50 @@ var
   D: TATTabData;
   R: TRect;
   N: integer;
+  Pnt: TPoint;
+  bOverX, bRightSide: boolean;
 begin
-  N:= FTabIndexDrop;
-  if N<0 then
-    N:= TabCount-1;
-  //if N<>FTabIndex then
+  if not _IsDrag then Exit;
+
+  Pnt:= ScreenToClient(Mouse.CursorPos);
+  N:= GetTabAt(Pnt.X, Pnt.Y, bOverX);
+
+  if (N=cTabIndexPlus) or (N=cTabIndexEmptyArea) then
   begin
-    D:= GetTabData(N);
-    if D=nil then Exit;
-    R:= GetRectScrolled(D.TabRect);
-
-    case FOptPosition of
-      atpTop,
-      atpBottom:
-        begin
-          R.Left:= IfThen(N<=FTabIndex, R.Left, R.Right);
-          R.Left:= R.Left - DoScale(FOptDropMarkSize) div 2;
-          R.Right:= R.Left + DoScale(FOptDropMarkSize);
-        end;
-      else
-        begin
-          R.Top:= IfThen(N<=FTabIndex, R.Top, R.Bottom);
-          R.Top:= R.Top  - DoScale(FOptDropMarkSize) div 2;
-          R.Bottom:= R.Top + DoScale(FOptDropMarkSize);
-        end;
-    end;
-
-    C.Brush.Color:= FColorDropMark;
-    C.FillRect(R);
+    N:= TabCount-1;
+    bRightSide:= true;
+  end
+  else
+  begin
+    if N<0 then
+      N:= TabCount-1;
+    bRightSide:= false; //N>FTabIndex;
   end;
+
+  D:= GetTabData(N);
+  if D=nil then Exit;
+  R:= GetRectScrolled(D.TabRect);
+
+  case FOptPosition of
+    atpTop,
+    atpBottom:
+      begin
+        if bRightSide then
+          R.Left:= R.Right;
+        R.Left:= R.Left - DoScale(FOptDropMarkSize) div 2;
+        R.Right:= R.Left + DoScale(FOptDropMarkSize);
+      end;
+    else
+      begin
+        if bRightSide then
+          R.Top:= R.Bottom;
+        R.Top:= R.Top - DoScale(FOptDropMarkSize) div 2;
+        R.Bottom:= R.Top + DoScale(FOptDropMarkSize);
+      end;
+  end;
+
+  C.Brush.Color:= FColorDropMark;
+  C.FillRect(R);
 end;
 
 
@@ -3053,14 +3209,14 @@ end;
 
 procedure TATTabs.MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: integer);
 var
-  IsClick, IsDblClick: boolean;
+  bClick, bDblClick: boolean;
 begin
   inherited;
-  IsClick:= FMouseDown and
+  bClick:= FMouseDown and
     (Abs(X-FMouseDownPnt.X) < cTabsMouseMaxDistanceToClick) and
     (Abs(Y-FMouseDownPnt.Y) < cTabsMouseMaxDistanceToClick);
-  IsDblClick:= IsClick and FMouseDownDbl;
-  //IsRightClick:= FMouseDownRightBtn and
+  bDblClick:= bClick and FMouseDownDbl;
+  //bRightClick:= FMouseDownRightBtn and
   //  (Abs(X-FMouseDownPnt.X) < cTabsMouseMaxDistanceToClick) and
   //  (Abs(Y-FMouseDownPnt.Y) < cTabsMouseMaxDistanceToClick);
 
@@ -3073,7 +3229,7 @@ begin
   FTabIndexDrop:= -1;
   FTabIndexDropOld:= -1;
 
-  if IsDblClick then
+  if bDblClick then
   begin
     if Assigned(FOnTabDblClick) and (FTabIndexOver>=0) then
       FOnTabDblClick(Self, FTabIndexOver);
@@ -3087,7 +3243,7 @@ begin
     Exit
   end;
 
-  if IsClick then     
+  if bClick then
   begin
     DoHandleClick;
     Invalidate;
@@ -3095,10 +3251,9 @@ begin
   end;
 end;
 
-procedure TATTabs.MouseDown(Button: TMouseButton; Shift: TShiftState;
-  X, Y: integer);
+procedure TATTabs.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: integer);
 var
-  IsX: boolean;
+  bOverX: boolean;
 begin
   inherited;
   FMouseDown:= Button in [mbLeft, mbMiddle]; //but not mbRight
@@ -3108,12 +3263,13 @@ begin
   FMouseDownShift:= Shift;
   FMouseDragBegins:= false;
 
-  FTabIndexOver:= GetTabAt(X, Y, IsX);
+  FTabIndexOver:= GetTabAt(X, Y, bOverX);
 
-  //activate tab only if not X clicked
-  if not IsX then
-    //if TabIndex<>FTabIndexOver then //with this check, CudaText cannot focus active tab in passive tab-group
-      TabIndex:= FTabIndexOver;
+  if Button=mbLeft then
+    //activate tab only if not X clicked
+    if not bOverX then
+      //if TabIndex<>FTabIndexOver then //with this check, CudaText cannot focus active tab in passive tab-group
+        TabIndex:= FTabIndexOver;
 
   Invalidate;
 end;
@@ -3207,6 +3363,13 @@ var
   P: TPoint;
   D: TATTabData;
 begin
+  if _IsDrag then
+  begin
+    CancelDrag;
+    Invalidate;
+    exit;
+  end;
+
   if (FTabIndex=FTabIndexOver) then // to check if click was processed as a valid click on a tab
   begin
     D:= GetTabData(FTabIndex);
@@ -3226,7 +3389,7 @@ type
 
 procedure TATTabs.MouseMove(Shift: TShiftState; X, Y: integer);
 var
-  IsX: boolean;
+  bOverX: boolean;
   Data: TATTabData;
 begin
   inherited;
@@ -3250,51 +3413,22 @@ begin
     Exit
   end;
 
-  FTabIndexOver:= GetTabAt(X, Y, IsX);
+  FTabIndexOver:= GetTabAt(X, Y, bOverX);
   FTabIndexDrop:= FTabIndexOver;
   if FTabIndexOver=cTabIndexNone then exit;
   Data:= nil;
 
+  if bOverX then
+    FTabIndexHinted:= cTabIndexCloseBtn
+  else
+    FTabIndexHinted:= FTabIndexOver;
+
   if ShowHint then
   begin
-    if IsX then
-      FTabIndexHinted:= cTabIndexCloseBtn
-    else
-      FTabIndexHinted:= FTabIndexOver;
-
     if FTabIndexHinted<>FTabIndexHintedPrev then
     begin
       FTabIndexHintedPrev:= FTabIndexHinted;
-      Hint:= '';
-      case FTabIndexHinted of
-        cTabIndexPlus,
-        cTabIndexPlusBtn:
-          Hint:= FHintForPlus;
-        cTabIndexArrowScrollLeft:
-          Hint:= FHintForArrowLeft;
-        cTabIndexArrowScrollRight:
-          Hint:= FHintForArrowRight;
-        cTabIndexArrowMenu:
-          Hint:= FHintForArrowMenu;
-        cTabIndexCloseBtn:
-          Hint:= FHintForX;
-        cTabIndexUser0:
-          Hint:= FHintForUser0;
-        cTabIndexUser1:
-          Hint:= FHintForUser1;
-        cTabIndexUser2:
-          Hint:= FHintForUser2;
-        cTabIndexUser3:
-          Hint:= FHintForUser3;
-        cTabIndexUser4:
-          Hint:= FHintForUser4;
-        0..10000:
-          begin
-            Data:= GetTabData(FTabIndexOver);
-            if Assigned(Data) and (Data.TabHint<>'') then
-              Hint:= Data.TabHint;
-          end;
-      end; //case
+      ApplyTabHintToControlHint(FTabIndexHinted, Data, false);
 
       if Hint<>'' then
         Application.ActivateHint(Mouse.CursorPos)
@@ -3312,10 +3446,50 @@ begin
 
   //repaint only if really needed
   //use {$define tab_paint_counter} to debug it
-  if (FTabIndexOver<>FLastOverIndex) or (IsX<>FLastOverX) then
+  if (FTabIndexOver<>FLastOverIndex) or (bOverX<>FLastOverX) then
   begin
     Invalidate;
   end;
+end;
+
+procedure TATTabs.ApplyTabHintToControlHint(ATabIndex: integer; var AData: TATTabData; AResetLastIndex: boolean);
+begin
+  if AResetLastIndex then
+    FTabIndexHintedPrev:= cTabIndexNone;
+
+  case ATabIndex of
+    cTabIndexPlus,
+    cTabIndexPlusBtn:
+      Hint:= FHintForPlus;
+    cTabIndexArrowScrollLeft:
+      Hint:= FHintForArrowLeft;
+    cTabIndexArrowScrollRight:
+      Hint:= FHintForArrowRight;
+    cTabIndexArrowMenu:
+      Hint:= FHintForArrowMenu;
+    cTabIndexCloseBtn:
+      Hint:= FHintForX;
+    cTabIndexUser0:
+      Hint:= FHintForUser0;
+    cTabIndexUser1:
+      Hint:= FHintForUser1;
+    cTabIndexUser2:
+      Hint:= FHintForUser2;
+    cTabIndexUser3:
+      Hint:= FHintForUser3;
+    cTabIndexUser4:
+      Hint:= FHintForUser4;
+    0..10000:
+      begin
+        AData:= GetTabData(ATabIndex);
+        if Assigned(AData) then
+          Hint:= AData.TabHint
+        else
+          Hint:= '';
+      end;
+    else
+      Hint:= '';
+  end; //case
 end;
 
 function TATTabs.DoMouseWheel(Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint): Boolean;
@@ -3421,6 +3595,9 @@ begin
 
   if Assigned(FOnTabMove) then
     FOnTabMove(Self, -1, AIndex);
+
+  if FTabIndex<0 then
+    FTabIndex:= 0;
 
   Result:= Data;
 end;
@@ -3536,8 +3713,11 @@ begin
     Invalidate;
 
     if (TabCount=0) then
+    begin
+      FTabIndex:= -1;
       if Assigned(FOnTabEmpty) then
         FOnTabEmpty(Self);
+    end;
 
     if Assigned(FOnTabMove) then
       FOnTabMove(Self, AIndex, -1);
@@ -3555,20 +3735,30 @@ procedure TATTabs.SetTabIndexEx(AIndex: integer; ADisableEvent: boolean);
 //note: check "if AIndex=FTabIndex" must not be here, must be in outer funcs.
 //Sometimes SetTabIndex(TabIndex) is used in CudaText: do focus of clicked tab, and in DeleteTab.
 var
-  CanChange, DisableEvent, TabChanged: boolean;
+  bCanChange, bDisableEvent, bTabChanged: boolean;
+  PrevMousePos, NextMousePos: TPoint;
 begin
   if csLoading in ComponentState then
     FTabIndexLoaded:= AIndex;
-  DisableEvent:= (csLoading in ComponentState) or ADisableEvent;
-  TabChanged:= AIndex<>FTabIndex;
+  bDisableEvent:= (csLoading in ComponentState) or ADisableEvent;
+  bTabChanged:= AIndex<>FTabIndex;
 
   if IsIndexOk(AIndex) then
   begin
-    CanChange:= true;
     if Assigned(FOnTabChangeQuery) then
     begin
-      FOnTabChangeQuery(Self, AIndex, CanChange);
-      if not CanChange then Exit;
+      bCanChange:= true;
+      PrevMousePos:= Mouse.CursorPos;
+      FOnTabChangeQuery(Self, AIndex, bCanChange);
+
+      NextMousePos:= Mouse.CursorPos;
+      if Abs(NextMousePos.X-PrevMousePos.X) + Abs(NextMousePos.Y-PrevMousePos.Y) >= 4 then
+      begin
+        if FMouseDown then
+          MouseUp(mbLeft, [], 0, 0);
+      end;
+
+      if not bCanChange then Exit;
     end;
 
     FTabIndex:= AIndex;
@@ -3576,12 +3766,12 @@ begin
     MakeVisible(AIndex);
     Invalidate;
 
-    if not DisableEvent then
+    if not bDisableEvent then
     begin
       if Assigned(FOnTabClick) then
         FOnTabClick(Self);
 
-      if Assigned(FOnTabChanged) and TabChanged then
+      if Assigned(FOnTabChanged) and bTabChanged then
         FOnTabChanged(Self);
     end;
   end;
@@ -3958,7 +4148,7 @@ var
   NTab, NTabTo: integer;
   Data: TATTabData;
   P: TPoint;
-  IsX: boolean;
+  bOverX: boolean;
 begin
   if not (ATarget is TATTabs) then
   begin
@@ -3976,7 +4166,7 @@ begin
   if not ATabs.OptMouseDragEnabled then Exit;
 
   NTab:= FTabIndex;
-  NTabTo:= ATabs.GetTabAt(APnt.X, APnt.Y, IsX); //-1 is allowed
+  NTabTo:= ATabs.GetTabAt(APnt.X, APnt.Y, bOverX); //-1 is allowed
 
   Data:= GetTabData(NTab);
   if Data=nil then Exit;
@@ -4053,10 +4243,8 @@ end;
 procedure TATTabs.DragOver(Source: TObject; X, Y: integer; State: TDragState;
   var Accept: Boolean);
 var
-  Limit: integer;
-  {$ifndef FPC}
+  NIndex, Limit: integer;
   IsX: Boolean;
-  {$endif}
 begin
   //this is workaround for too early painted drop-mark (vertical red line)
   if not FMouseDragBegins then
@@ -4082,6 +4270,15 @@ begin
 
     if Accept then
       Invalidate;
+  end
+  else
+  if Source is TCustomControl then
+  begin
+    //support drag-drop of text from TATSynEdit
+    Accept:= false;
+    NIndex:= GetTabAt(X, Y, IsX);
+    if (NIndex>=0) and (TabIndex<>NIndex) then
+      TabIndex:= NIndex;
   end
   else
   begin
@@ -4454,11 +4651,13 @@ end;
 
 procedure TATTabs.DoContextPopup(MousePos: TPoint; var Handled: Boolean);
 begin
+  {$ifdef FPC}
   if not IsEnabled then //prevent popup menu if form is disabled, needed for CudaText plugins dlg_proc API on Qt5
   begin
     Handled:= true;
     exit;
   end;
+  {$endif}
 
   inherited;
   if not Handled then
@@ -4556,7 +4755,7 @@ procedure TATTabs.UpdateCanvasAntialiasMode(C: TCanvas);
 {$ifdef fpc}
 begin
   // https://gitlab.com/freepascal.org/lazarus/lazarus/-/issues/39416
-  {$ifndef LCLQt5}
+  {$if not defined(LCLQt5) and not defined(LCLQt6)}
   C.AntialiasingMode:= amOn;
   {$endif}
 end;
@@ -4615,6 +4814,8 @@ procedure TATTabs.UpdateCaptionProps(C: TCanvas; const ACaption: TATTabString;
     StrW: WideString;
   {$endif}
   begin
+    Ex.cx:= 0;
+    Ex.cy:= 0;
     {$ifdef WIDE}
     StrW:= UTF8Decode(S);
     Windows.GetTextExtentPoint32W(C.Handle, PWideChar(StrW), Length(StrW), Ex);
@@ -4704,6 +4905,10 @@ begin
   if not FScrollingNeeded then exit;
 
   if IsTabVisible(AIndex) then exit;
+
+  //simulate repaint, otherwise cannot scroll to the actual end for the last index :(
+  if AIndex=TabCount-1 then
+    PaintSimulated;
 
   D:= GetTabData(AIndex);
   if D=nil then exit;
@@ -4879,16 +5084,20 @@ begin
   begin
     if AData.TabPinned then
       Result:= Result+FOptShowPinnedText;
+    {
     if AData.TabModified then
       Result:= Result+FOptShowModifiedText;
+      }
     if FOptShowNumberPrefix<>'' then
       Result:= Result+Format(FOptShowNumberPrefix, [ATabIndex+1]);
     Result:= Result+AData.TabCaptionFull;
   end
   else
   begin
+    {
     if AData.TabModified then
       Result:= Result+FOptShowModifiedText;
+      }
   end;
 end;
 
@@ -4900,7 +5109,7 @@ end;
 initialization
   cRect0:= Rect(0, 0, 0, 0);
 
-  {$if defined(LCLQT5) or defined(darwin)}
+  {$if defined(LCLQt5) or defined(LCLQt6) or defined(darwin)}
   ATTabsStretchDrawEnabled:= false;
   ATTabsCircleDrawEnabled:= false;
   ATTabsPixelsDrawEnabled:= false;

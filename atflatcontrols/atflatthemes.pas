@@ -29,7 +29,11 @@ type
   TATFlatTheme = record
     FontName: string;
     FontSize: integer;
+    FontQuality: TFontQuality;
     FontStyles: TFontStyles;
+
+    MonoFontName: string;
+    MonoFontSize: integer;
 
     ColorFont: TColor;
     ColorFontDisabled: TColor;
@@ -107,6 +111,7 @@ initialization
   begin
     FontName:= 'default';
     FontSize:= 10;
+    FontQuality:= fqDefault;
     FontStyles:= [];
 
     ColorFont:= $303030;

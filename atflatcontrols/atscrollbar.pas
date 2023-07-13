@@ -82,6 +82,8 @@ type
     ColorArrowFillPressed: TColor;
 
     ColorArrowSign: TColor;
+    ColorArrowSignOver: TColor;
+    ColorArrowSignPressed: TColor;
     ColorScrolled: TColor;
 
     InitialSize: integer;
@@ -113,8 +115,6 @@ type
 
   TATScrollbar = class(TCustomControl)
   private
-    FTimerMouseover: TTimer;
-
     {$ifndef FPC}
     FOnMouseLeave: TNotifyEvent;
     FOnMouseEnter: TNotifyEvent;
@@ -163,7 +163,6 @@ type
     {$endif}
 
     function EffectiveRectSize: integer;
-    procedure TimerMouseoverTick(Sender: TObject);
 
     procedure DoPaintArrow(C: TCanvas; const R: TRect; AType: TATScrollbarElemType);
     procedure DoPaintBackAndThumb(C: TCanvas);
@@ -271,26 +270,10 @@ end;
 
 { TATScrollbar }
 
-procedure TATScrollbar.TimerMouseoverTick(Sender: TObject);
-//timer is workaround for LCL issue, where MouseLeave not called
-//if mouse leaves app window area (at least on Linux)
-{$ifdef FPC}
-var
-  Pnt: TPoint;
-{$endif}
-begin
-  {$ifdef FPC}
-  Pnt:= ScreenToClient(Mouse.CursorPos);
-  if not PtInRect(ClientRect, Pnt) then
-    MouseLeave;
-  {$endif}
-end;
-
 {$ifdef FPC}
 procedure TATScrollbar.MouseLeave;
 begin
   inherited;
-  FTimerMouseover.Enabled:= false;
   Invalidate;
 end;
 
@@ -298,7 +281,6 @@ procedure TATScrollbar.MouseEnter;
 begin
   inherited;
   Invalidate;
-  FTimerMouseover.Enabled:= true;
 end;
 {$endif}
 
@@ -336,11 +318,6 @@ begin
   FTimer.Enabled:= false;
   FTimer.Interval:= 100;
   FTimer.OnTimer:= TimerTimer;
-
-  FTimerMouseover:= TTimer.Create(Self);
-  FTimerMouseover.Enabled:= false;
-  FTimerMouseover.Interval:= 1000;
-  FTimerMouseover.OnTimer:= TimerMouseoverTick;
 
   FMouseDown:= false;
   FMouseDragOffset:= 0;
@@ -702,44 +679,48 @@ procedure TATScrollbar.DoPaintStd_Arrow(C: TCanvas; R: TRect;
 var
   P: TPoint;
   NSize: Integer;
+  NColorBack, NColorSymbol: TColor;
 begin
   if IsRectEmpty(R) then exit;
   C.Brush.Color:= ColorToRGB(FTheme^.ColorArrowBorder);
   C.FillRect(R);
 
   InflateRect(R, -1, -1);
-  C.Brush.Color:= ColorToRGB(FTheme^.ColorArrowFill);
-  C.FillRect(R);
+  NColorBack:= FTheme^.ColorArrowFill;
+  NColorSymbol:= FTheme^.ColorArrowSign;
 
   if (FMouseDownOnUp and (AType in [aseArrowUp, aseArrowLeft])) or
     (FMouseDownOnDown and (AType in [aseArrowDown, aseArrowRight])) then
   begin
-    C.Brush.Color:= ColorToRGB(FTheme^.ColorArrowFillPressed);
-    C.FillRect(R);
+    NColorBack:= ColorToRGB(FTheme^.ColorArrowFillPressed);
+    NColorSymbol:= ColorToRGB(FTheme^.ColorArrowSignPressed);
   end
   else
   begin
     P:= Mouse.CursorPos;
     P:= ScreenToClient(P);
-    if PtInRect(R,P) then
+    if PtInRect(R, P) then
     begin
-      C.Brush.Color:= ColorToRGB(FTheme^.ColorArrowFillOver);
-      C.FillRect(R);
+      NColorBack:= ColorToRGB(FTheme^.ColorArrowFillOver);
+      NColorSymbol:= ColorToRGB(FTheme^.ColorArrowSignOver);
     end;
   end;
+
+  C.Brush.Color:= NColorBack;
+  C.FillRect(R);
 
   P:= CenterPoint(R);
   NSize:= DoScale(FTheme^.ArrowSize);
 
   case AType of
     aseArrowUp:
-      CanvasPaintTriangleUp(C, FTheme^.ColorArrowSign, P, NSize);
+      CanvasPaintTriangleUp(C, NColorSymbol, P, NSize);
     aseArrowDown:
-      CanvasPaintTriangleDown(C, FTheme^.ColorArrowSign, P, NSize);
+      CanvasPaintTriangleDown(C, NColorSymbol, P, NSize);
     aseArrowLeft:
-      CanvasPaintTriangleLeft(C, FTheme^.ColorArrowSign, P, NSize);
+      CanvasPaintTriangleLeft(C, NColorSymbol, P, NSize);
     aseArrowRight:
-      CanvasPaintTriangleRight(C, FTheme^.ColorArrowSign, P, NSize);
+      CanvasPaintTriangleRight(C, NColorSymbol, P, NSize);
     else
       Exit;
   end;
@@ -1158,6 +1139,8 @@ initialization
     ColorArrowFillPressed:= $e0a0a0;
 
     ColorArrowSign:= $404040;
+    ColorArrowSignOver:= ColorArrowSign;
+    ColorArrowSignPressed:= ColorArrowSign;
     ColorScrolled:= $d0b0b0;
 
     InitialSize:= 14;

@@ -4,7 +4,7 @@ interface
 
 uses
   SysUtils, Variants, Classes, Graphics, Controls, Forms, Dialogs, ExtCtrls,
-  StdCtrls, LCLProc, LCLType, Spin, ComCtrls, FileUtil,
+  StdCtrls, LCLProc, LCLType, Spin, ComCtrls, Menus, FileUtil,
   ATCanvasPrimitives,
   attabs;
 
@@ -60,6 +60,9 @@ type
     LabelThemes: TLabel;
     labStatus: TLabel;
     btnModify: TButton;
+    MenuItem1: TMenuItem;
+    MenuItem2: TMenuItem;
+    PopupMenu1: TPopupMenu;
     procedure BarScaleChange(Sender: TObject);
     procedure btnStressClick(Sender: TObject);
     procedure btnThemeBlack1Click(Sender: TObject);
@@ -97,6 +100,7 @@ type
     procedure EditInfoChange(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure btnModifyClick(Sender: TObject);
+    procedure MenuItem1Click(Sender: TObject);
   private
     { Private declarations }
     LockEdit: boolean;
@@ -109,6 +113,8 @@ type
     procedure TabClickUserButton(Sender: TObject; AIndex: integer);
     procedure TabCloseEvent(Sender: TObject; ATabIndex: Integer; var ACanClose,
       ACanContinue: boolean);
+    procedure TabContextPopup(Sender: TObject; MousePos: TPoint;
+      var Handled: Boolean);
     procedure TabDragging(Sender: TObject; AIndexFrom, AIndexTo: integer;
       var ACanDrop: boolean);
     procedure TabMove(Sender: TObject; NFrom, NTo: Integer);
@@ -166,6 +172,7 @@ begin
   t_top.OnTabDrawAfter:= TabDrawAfter_Top;
   t_top.OnTabClickUserButton:=TabClickUserButton;
   t_top.OnTabDragging:=TabDragging;
+  t_top.OnContextPopup:=TabContextPopup;
   t_top.OptMouseDoubleClickPlus:= true;
   t_top.OptShowXButtons:= atbxShowAll;
   t_top.OptSpaceBetweenTabs:= 10;
@@ -174,6 +181,10 @@ begin
   t_top.Images:= ImageList1;
   t_top.OptVarWidth:= true;
   t_top.ShowHint:= true;
+  //
+  //t_top.DragMode:= dmAutomatic; //drag-drop must work with automatic too
+  t_top.DragMode:= dmManual;
+  //
   tabTopHeight:= t_top.Height;
 
   t_top.AddTab(-1, 'Tab'#10'multiline');
@@ -347,6 +358,10 @@ end;
 procedure TForm1.TabChangeQuery(Sender: TObject; ANewTabIndex: integer;
   var ACanChange: boolean);
 begin
+  ACanChange:= true;
+  exit;
+
+  //this is not used now:
   ACanChange:= Application.MessageBox(
     PChar('Change tab index to '+IntToStr(ANewTabIndex)+'?'),
     'Tab change',
@@ -720,11 +735,25 @@ begin
   t_top.Invalidate;
 end;
 
+procedure TForm1.MenuItem1Click(Sender: TObject);
+begin
+  ShowMessage('Test');
+end;
+
 procedure TForm1.TabCloseEvent(Sender: TObject; ATabIndex: Integer;
   var ACanClose, ACanContinue: boolean);
 begin
   ACanClose:= Application.MessageBox('Close this tab?', 'Demo',
     MB_OKCANCEL+MB_ICONQUESTION) = ID_OK;
+end;
+
+procedure TForm1.TabContextPopup(Sender: TObject; MousePos: TPoint;
+  var Handled: Boolean);
+var
+  P: TPoint;
+begin
+  P:= Mouse.CursorPos;
+  PopupMenu1.PopUp(P.X, P.Y);
 end;
 
 procedure TForm1.TabDragging(Sender: TObject; AIndexFrom, AIndexTo: integer;

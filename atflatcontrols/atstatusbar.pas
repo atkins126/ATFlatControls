@@ -303,7 +303,7 @@ begin
     if Assigned(FBitmap) then
     begin
       DoPaintTo(FBitmap.Canvas);
-      Canvas.CopyRect(ClientRect, FBitmap.Canvas, ClientRect);
+      Canvas.Draw(0, 0, FBitmap);
     end;
   end
   else
@@ -335,6 +335,7 @@ procedure TATStatus.DoPaintPanelTo(C: TCanvas; ARect: TRect;
 var
   RectBg, RectText: TRect;
   PosIcon: TPoint;
+  iconWidth, iconHeight, FontSize: Integer;
   TextSize: TSize;
   NOffsetLeft, NPad: integer;
   NColor: TColor;
@@ -365,21 +366,50 @@ begin
   if Assigned(FImages) then
     if AData.ImageIndex>=0 then
     begin
+      {$ifdef FPC}
+      iconWidth:= Theme^.DoScale(FImages.Width);
+      iconHeight:= Theme^.DoScale(FImages.Height);
+      {$else}
+      iconWidth:= FImages.Width;
+      iconHeight:= FImages.Height;
+      {$endif}
+
       if AData.Caption='' then
         case AData.Align of
           taLeftJustify:
             PosIcon.x:= ARect.Left+NPad;
           taRightJustify:
-            PosIcon.x:= (ARect.Right-FImages.Width-NPad);
+            PosIcon.x:= (ARect.Right-iconWidth-NPad);
           taCenter:
-            PosIcon.x:= (ARect.Left+ARect.Right-FImages.Width) div 2
+            PosIcon.x:= (ARect.Left+ARect.Right-iconWidth) div 2
         end
       else
         PosIcon.x:= ARect.Left+NPad;
-      PosIcon.y:= (ARect.Top+ARect.Bottom-FImages.Height) div 2;
 
-      FImages.Draw(C, PosIcon.x, PosIcon.y, AData.ImageIndex);
-      Inc(RectText.Left, FImages.Width);
+      PosIcon.y:= (ARect.Top+ARect.Bottom-iconHeight) div 2;
+
+      {$ifdef FPC}
+      if Theme^.ScalePercents<150 then
+        FImages.Draw(C,
+          PosIcon.X,
+          PosIcon.Y,
+          AData.ImageIndex)
+      else
+        FImages.StretchDraw(C,
+          AData.ImageIndex,
+          Rect(
+            PosIcon.X,
+            PosIcon.Y,
+            PosIcon.X+iconWidth,
+            PosIcon.Y+iconHeight));
+      {$else}
+      FImages.Draw(C,
+        PosIcon.X,
+        PosIcon.Y,
+        AData.ImageIndex);
+      {$endif}
+
+      Inc(RectText.Left, iconWidth);
     end;
 
   if AData.Caption<>'' then
@@ -462,6 +492,15 @@ begin
   if AData.OverlayText<>'' then
   begin
     TextSize:= C.TextExtent(AData.OverlayText);
+    FontSize:= C.Font.Size;
+
+    //auto-decrease font size if OverlayText is wide
+    while (TextSize.cx>ARect.Width div 2) and (C.Font.Size>7) do
+    begin
+      C.Font.Size:= C.Font.Size-1;
+      TextSize:= C.TextExtent(AData.OverlayText);
+    end;
+
     C.Brush.Color:= Theme^.ColorBgOverlay;
     C.Font.Color:= Theme^.ColorFontOverlay;
 
@@ -492,6 +531,7 @@ begin
       ARect.Left+PosIcon.x,
       ARect.Top+PosIcon.y,
       AData.OverlayText);
+    C.Font.Size:= FontSize;
   end;
 end;
 

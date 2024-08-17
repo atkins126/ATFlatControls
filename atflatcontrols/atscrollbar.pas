@@ -147,6 +147,7 @@ type
     FOnOwnerDraw: TATScrollbarDrawEvent;
 
     //drag-drop
+    FMouseDirectJumping: boolean;
     FMouseDown: boolean;
     FMouseDragOffset: Integer;
     FMouseDownOnUp,
@@ -360,7 +361,7 @@ begin
     if Assigned(FBitmap) then
     begin
       DoPaintTo(FBitmap.Canvas);
-      Canvas.CopyRect(ClientRect, FBitmap.Canvas, ClientRect);
+      Canvas.Draw(0, 0, FBitmap);
     end;
   end
   else
@@ -477,7 +478,7 @@ procedure TATScrollbar.DoPaintBackScrolling(C: TCanvas);
 var
   Typ: TATScrollbarElemType;
 begin
-  if Theme^.DirectJumpOnClickPageUpDown then exit;
+  if FMouseDirectJumping then exit;
 
   if IsHorz then
     Typ:= aseScrollingAreaH
@@ -516,6 +517,7 @@ begin
   FMouseDownOnDown:= BetterPtInRect(FRectArrDown, Point(X, Y));
   FMouseDownOnPageUp:= BetterPtInRect(FRectPageUp, Point(X, Y));
   FMouseDownOnPageDown:= BetterPtInRect(FRectPageDown, Point(X, Y));
+  FMouseDirectJumping:= false;
 
   Invalidate;
 
@@ -542,9 +544,12 @@ begin
     else
     if FMouseDownOnPageUp or FMouseDownOnPageDown then
     begin
-      if (Button=mbMiddle) or
-        ((Button=mbLeft) and (ssShift in Shift)) or
-        FTheme^.DirectJumpOnClickPageUpDown then
+      FMouseDirectJumping:=
+        (Button=mbMiddle) xor //middle-click makes different choice
+        (((Button=mbLeft) and (ssShift in Shift)) or
+         FTheme^.DirectJumpOnClickPageUpDown);
+
+      if FMouseDirectJumping then
       begin
         FMouseDownOnThumb:= true;
         FMouseDragOffset:= 0;
@@ -1159,8 +1164,8 @@ initialization
     DirectJumpOnClickPageUpDown:= false;
     ClickFocusesParentControl:= true;
 
-    MinSizeToShowThumb:= 10;
-    ThumbMinSize:= 8;
+    MinSizeToShowThumb:= 20;
+    ThumbMinSize:= 16;
     ThumbMarkerOffset:= 3;
     ThumbMarkerMinimalSize:= 20;
     ThumbMarkerDecorSize:= 2;
